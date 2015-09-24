@@ -1,0 +1,7 @@
+<resources>
+
+    <style name="GdxTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+    </style>
+
+</resources>
