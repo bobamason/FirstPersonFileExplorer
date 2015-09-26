@@ -2,6 +2,7 @@ package org.masonapps.firstpersonfileexplorer.bullet;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Mesh;
@@ -29,6 +30,8 @@ public class BaseBulletApp extends ApplicationAdapter {
     public Environment environment;
     public PerspectiveCamera camera;
     public ModelBatch modelBatch;
+    public AssetManager assets;
+    public boolean loading = true;
 
     private void init(){
         Bullet.init();
@@ -41,6 +44,7 @@ public class BaseBulletApp extends ApplicationAdapter {
     @Override
     public void create() {
         init();
+        assets = new AssetManager();
         world = createWorld();
         modelBatch = new ModelBatch();
         environment = new Environment();
@@ -73,6 +77,11 @@ public class BaseBulletApp extends ApplicationAdapter {
     }
 
     public void update() {
+        if(loading) {
+            if (assets.update()) {
+                doneLoading();
+            }
+        }
         world.update();
     }
 
@@ -97,6 +106,8 @@ public class BaseBulletApp extends ApplicationAdapter {
         }
         disposables.clear();
         modelBatch.dispose();
+        assets.dispose();
+        assets = null;
         modelBatch = null;
     }
     
@@ -125,5 +136,9 @@ public class BaseBulletApp extends ApplicationAdapter {
         shape.dispose();
         hull.dispose();
         return result;
+    }
+
+    public void doneLoading() {
+        loading = false;
     }
 }

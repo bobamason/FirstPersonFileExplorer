@@ -2,6 +2,7 @@ package org.masonapps.firstpersonfileexplorer.firstperson;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g3d.utils.FirstPersonCameraController;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
@@ -18,11 +19,12 @@ import com.badlogic.gdx.physics.bullet.dynamics.btDiscreteDynamicsWorld;
 import com.badlogic.gdx.physics.bullet.dynamics.btKinematicCharacterController;
 import com.badlogic.gdx.physics.bullet.dynamics.btSequentialImpulseConstraintSolver;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Touchpad;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 import org.masonapps.firstpersonfileexplorer.bullet.BaseBulletApp;
 import org.masonapps.firstpersonfileexplorer.bullet.BulletWorld;
-import org.masonapps.firstpersonfileexplorer.controls.SimpleJoystick;
 
 /**
  * Created by Bob on 8/15/2015.
@@ -38,10 +40,13 @@ public class FirstPersonApp extends BaseBulletApp {
     private Vector3 tempV = new Vector3();
     private Vector3 cross = new Vector3();
     public Stage stage;
-    public SimpleJoystick moveJoystick;
+    public Skin skin;
+    public Touchpad moveJoystick;
     public FirstPersonCameraController cameraController;
     public float deltaTime;
     public float walkSpeed = 6f;
+    public static final String THUMB_PATH = "joystick/joystick_thumb.png";
+    public static final String TOUCH_AREA_PATH = "joystick/joystick_touch_area.png";
 
     @Override
     public BulletWorld createWorld() {
@@ -58,10 +63,9 @@ public class FirstPersonApp extends BaseBulletApp {
     @Override
     public void create() {
         super.create();
+        skin = new Skin();
         stage = new Stage(new ScreenViewport());
-        moveJoystick = new SimpleJoystick(stage);
         disposables.add(stage);
-        disposables.add(moveJoystick);
         characterTransform = new Matrix4().setToTranslation(0f, 1f, 0f);
         ghostObject = new btPairCachingGhostObject();
         ghostObject.setWorldTransform(characterTransform);
@@ -79,6 +83,17 @@ public class FirstPersonApp extends BaseBulletApp {
         camera.update();
         cameraController = new FirstPersonCameraController(camera);
         Gdx.input.setInputProcessor(new InputMultiplexer(stage, cameraController));
+        
+        assets.load(THUMB_PATH, Texture.class);
+        assets.load(TOUCH_AREA_PATH, Texture.class);
+    }
+
+    @Override
+    public void doneLoading() {
+        skin.add(THUMB_PATH, assets.get(THUMB_PATH, Texture.class));
+        skin.add(TOUCH_AREA_PATH, assets.get(TOUCH_AREA_PATH, Texture.class));
+        moveJoystick = new Touchpad(40f, new Touchpad.TouchpadStyle(skin.newDrawable(TOUCH_AREA_PATH), skin.newDrawable(THUMB_PATH)));
+        super.doneLoading();
     }
 
     @Override
@@ -88,13 +103,15 @@ public class FirstPersonApp extends BaseBulletApp {
         cameraController.update();
         ghostObject.setWorldTransform(characterTransform);
         walkDirection.set(0, 0, 0);
-        cross.set(camera.up).crs(camera.direction);
-        cross.y = 0;
-        cross.nor();
-        tempV.set(camera.direction);
-        tempV.y = 0;
-        tempV.nor();
-        walkDirection.add(cross.scl(moveJoystick.getThumbPos().x * walkSpeed * deltaTime)).add(tempV.scl(-moveJoystick.getThumbPos().y * walkSpeed * deltaTime));
+        if(!loading) {
+            cross.set(camera.up).crs(camera.direction);
+            cross.y = 0;
+            cross.nor();
+            tempV.set(camera.direction);
+            tempV.y = 0;
+            tempV.nor();
+            walkDirection.add(cross.scl(moveJoystick.getKnobPercentX() * walkSpeed * deltaTime)).add(tempV.scl(-moveJoystick.getKnobPercentY() * walkSpeed * deltaTime));
+        }
         characterController.setWalkDirection(walkDirection);
         super.update();
         ghostObject.getWorldTransform(characterTransform);
@@ -118,6 +135,7 @@ public class FirstPersonApp extends BaseBulletApp {
         ghostObject.dispose();
         ghostShape.dispose();
         ghostPairCallback.dispose();
+        skin.dispose();
     }
 
     @Override
