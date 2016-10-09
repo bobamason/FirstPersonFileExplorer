@@ -3,7 +3,7 @@ package org.masonapps.firstpersonfileexplorer.firstperson;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g3d.utils.FirstPersonCameraController;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.bullet.collision.btAxisSweep3;
@@ -31,22 +31,23 @@ import org.masonapps.firstpersonfileexplorer.bullet.BulletWorld;
  */
 public class FirstPersonApp extends BaseBulletApp {
 
+    public static final String THUMB_PATH = "joystick/joystick_thumb.png";
+    public static final String TOUCH_AREA_PATH = "joystick/joystick_touch_area.png";
+    private static final float TOUCHPAD_SIZE = 128f;
     public btGhostPairCallback ghostPairCallback;
     public btPairCachingGhostObject ghostObject;
     public btConvexShape ghostShape;
     public btKinematicCharacterController characterController;
     public Matrix4 characterTransform;
     public Vector3 walkDirection = new Vector3();
-    private Vector3 tempV = new Vector3();
-    private Vector3 cross = new Vector3();
     public Stage stage;
     public Skin skin;
-    public Touchpad moveJoystick;
-    public FirstPersonCameraController cameraController;
+    public Touchpad touchpad;
+    public FPCameraContoller cameraController;
     public float deltaTime;
     public float walkSpeed = 6f;
-    public static final String THUMB_PATH = "joystick/joystick_thumb.png";
-    public static final String TOUCH_AREA_PATH = "joystick/joystick_touch_area.png";
+    private Vector3 tempV = new Vector3();
+    private Vector3 cross = new Vector3();
 
     @Override
     public BulletWorld createWorld() {
@@ -81,7 +82,7 @@ public class FirstPersonApp extends BaseBulletApp {
         characterTransform.getTranslation(camera.position);
         camera.up.set(0, 1, 0);
         camera.update();
-        cameraController = new FirstPersonCameraController(camera);
+        cameraController = new FPCameraContoller(camera);
         Gdx.input.setInputProcessor(new InputMultiplexer(stage, cameraController));
         
         assets.load(THUMB_PATH, Texture.class);
@@ -92,7 +93,12 @@ public class FirstPersonApp extends BaseBulletApp {
     public void doneLoading() {
         skin.add(THUMB_PATH, assets.get(THUMB_PATH, Texture.class));
         skin.add(TOUCH_AREA_PATH, assets.get(TOUCH_AREA_PATH, Texture.class));
-        moveJoystick = new Touchpad(40f, new Touchpad.TouchpadStyle(skin.newDrawable(TOUCH_AREA_PATH), skin.newDrawable(THUMB_PATH)));
+        touchpad = new Touchpad(40f, new Touchpad.TouchpadStyle(skin.newDrawable(TOUCH_AREA_PATH), skin.newDrawable(THUMB_PATH)));
+        stage.addActor(touchpad);
+        final float density = Gdx.graphics.getDensity();
+        final int margin = Math.round(10f * density);
+        touchpad.setSize(MathUtils.round(density * TOUCHPAD_SIZE), MathUtils.round(density * TOUCHPAD_SIZE));
+        touchpad.setPosition(margin, margin);
         super.doneLoading();
     }
 
@@ -104,13 +110,13 @@ public class FirstPersonApp extends BaseBulletApp {
         ghostObject.setWorldTransform(characterTransform);
         walkDirection.set(0, 0, 0);
         if(!loading) {
-            cross.set(camera.up).crs(camera.direction);
+            cross.set(camera.direction).crs(camera.up);
             cross.y = 0;
             cross.nor();
             tempV.set(camera.direction);
             tempV.y = 0;
             tempV.nor();
-            walkDirection.add(cross.scl(moveJoystick.getKnobPercentX() * walkSpeed * deltaTime)).add(tempV.scl(-moveJoystick.getKnobPercentY() * walkSpeed * deltaTime));
+            walkDirection.add(cross.scl(touchpad.getKnobPercentX() * walkSpeed * deltaTime)).add(tempV.scl(touchpad.getKnobPercentY() * walkSpeed * deltaTime));
         }
         characterController.setWalkDirection(walkDirection);
         super.update();
@@ -141,10 +147,5 @@ public class FirstPersonApp extends BaseBulletApp {
     @Override
     public void resize(int width, int height) {
         stage.getViewport().update(width, height, true);
-        final float density = Gdx.graphics.getDensity();
-        final int joyStickSize = Math.round(140f * density);
-        final int margin = Math.round(10f * density);
-        moveJoystick.setSize(joyStickSize, joyStickSize);
-        moveJoystick.setPosition(joyStickSize / 2 + margin, joyStickSize / 2 + margin);
     }
 }

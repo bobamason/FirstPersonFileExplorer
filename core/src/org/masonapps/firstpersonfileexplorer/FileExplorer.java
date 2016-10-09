@@ -11,17 +11,13 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute;
-import com.badlogic.gdx.graphics.g3d.environment.BaseLight;
-import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.bullet.Bullet;
-import com.badlogic.gdx.scenes.scene2d.InputEvent;
-import com.badlogic.gdx.scenes.scene2d.ui.ImageButton;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.physics.bullet.collision.btStaticPlaneShape;
+import com.badlogic.gdx.physics.bullet.dynamics.btDiscreteDynamicsWorld;
+import com.badlogic.gdx.physics.bullet.dynamics.btRigidBody;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.GdxRuntimeException;
 import com.badlogic.gdx.utils.ObjectMap;
@@ -36,8 +32,9 @@ import org.masonapps.firstpersonfileexplorer.text.Text3D;
 import java.io.File;
 import java.util.Comparator;
 
-public class FileExplorer extends FirstPersonApp {
+public class FileExplorer extends FirstPersonApp implements Hud.HudInteractionListener {
 
+    public static final Vector3 START_POS = new Vector3(0f, 1f, 0f);
     private static final String TURN_BODY = "models/turn_blank.g3db";
     private static final String TURN_MODEL = "models/turn.g3db";
     private static final String END_BODY = "models/end_blank.g3db";
@@ -51,37 +48,27 @@ public class FileExplorer extends FirstPersonApp {
     private static final String VIDEO_MODEL = "models/video.g3db";
     private static final String MUSIC_MODEL = "models/music.g3db";
     private static final String FILE_MODEL = "models/file_model.g3db";
-    private static final String ROOM_TEXTURE = "textures/room_texture.png";
-    private static final String ENTER_BUTTON_TEXTURE = "buttons/enter_btn.png";
-    private static final String COPY_BUTTON_TEXTURE = "buttons/copy_btn.png";
-    private static final String DELETE_BUTTON_TEXTURE = "buttons/delete_btn.png";
-    private static final String RENAME_BUTTON_TEXTURE = "buttons/rename_btn.png";
     private static final String FONT = "fonts/roboto_bold.ttf";
-    public static final Vector3 START_POS = new Vector3(0f, 1f, 0f);
     private static final float MIN_DIST2 = 8 * 8;
-    private final IActivityInterface activityInterface;
-    private ModelBuilder modelBuilder;
-    private int closestIndex = -1;
     private static final Vector3 tempV = new Vector3();
-    private SpriteBatch spriteBatch;
-    private Text3D text3D;
-    private float density;
-    private int buttonSize;
-    private int margin;
-    private FileHandle currentDir;
-    private BitmapFont labelFont;
-    private Label label;
-    private final ObjectMap<String, FileEntityConstructor> constructors = new ObjectMap<String, FileEntityConstructor>();
     private static final Matrix4 tempM = new Matrix4();
-    private Array<FileHandle> dirs;
-    private Array<FileHandle> files;
     private static final Comparator<? super FileHandle> comparator = new Comparator<FileHandle>() {
         @Override
         public int compare(FileHandle o1, FileHandle o2) {
             return o1.name().compareTo(o2.name());
         }
     };
+    private final IActivityInterface activityInterface;
+    private final ObjectMap<String, FileEntityConstructor> constructors = new ObjectMap<String, FileEntityConstructor>();
+    private int closestIndex = -1;
+    private SpriteBatch spriteBatch;
+    private Text3D text3D;
+    private FileHandle currentDir;
+    private BitmapFont labelFont;
+    private Array<FileHandle> dirs;
+    private Array<FileHandle> files;
     private int lastClosestIndex = closestIndex;
+    private Hud hud;
 
     public FileExplorer(IActivityInterface activityInterface) {
         this.activityInterface = activityInterface;
@@ -90,7 +77,8 @@ public class FileExplorer extends FirstPersonApp {
     @Override
     public void create() {
         super.create();
-        density = Gdx.graphics.getDensity();
+        ((btDiscreteDynamicsWorld) world.collisionWorld).addRigidBody(new btRigidBody(0, null, new btStaticPlaneShape(Vector3.Y, 0)));
+        final float density = Gdx.graphics.getDensity();
         dirs = new Array<FileHandle>();
         files = new Array<FileHandle>();
 
@@ -99,8 +87,8 @@ public class FileExplorer extends FirstPersonApp {
         fontParameter.size = Math.round(16f * density);
         labelFont = generator.generateFont(fontParameter);
         disposables.add(labelFont);
-        label = new Label("", new Label.LabelStyle(labelFont, Color.LIGHT_GRAY));
-        stage.addActor(label);
+        hud = new Hud(this, stage, skin, labelFont);
+        hud.setDensity(density);
 
         final FreeTypeFontGenerator.FreeTypeFontParameter fontParameter3D = new FreeTypeFontGenerator.FreeTypeFontParameter();
         fontParameter3D.size = 20;
@@ -115,7 +103,6 @@ public class FileExplorer extends FirstPersonApp {
         text3D.setScale(0.016f);
 
         spriteBatch = new SpriteBatch();
-        modelBuilder = new ModelBuilder();
         
         assets.load(T_SECTION_MODEL, Model.class);
         assets.load(T_SECTION_BODY, Model.class);
@@ -126,38 +113,18 @@ public class FileExplorer extends FirstPersonApp {
         assets.load(END_MODEL, Model.class);
         assets.load(END_BODY, Model.class);
         assets.load(ROOM_MODEL, Model.class);
-        assets.load(ROOM_TEXTURE, Texture.class);
         
         assets.load(IMAGE_MODEL, Model.class);
         assets.load(VIDEO_MODEL, Model.class);
         assets.load(MUSIC_MODEL, Model.class);
         assets.load(FILE_MODEL, Model.class);
-        
-        assets.load(ENTER_BUTTON_TEXTURE, Texture.class);
-        assets.load(COPY_BUTTON_TEXTURE, Texture.class);
-        assets.load(DELETE_BUTTON_TEXTURE, Texture.class);
-        assets.load(RENAME_BUTTON_TEXTURE, Texture.class);
-        initButtonDimens();
-    }
 
-    public void initButtonDimens() {
-        buttonSize = Math.round(density * 60f);
-        margin = Math.round(density * 10f);
-    }
-
-    @Override
-    public BaseLight createLight() {
-        final DirectionalLight directionalLight = new DirectionalLight();
-        directionalLight.set(Color.GRAY, new Vector3(0.4f, -1f, 0.6f).nor());
-        return directionalLight;
+        hud.load(assets);
     }
 
     @Override
     public void doneLoading() {
-        setupEnterButton();
-//        setupCopyButton();
-//        setupDeleteButton();
-//        setupRenameButton();
+        hud.doneLoading(assets);
 
         characterTransform.setToTranslation(START_POS);
         characterTransform.getTranslation(camera.position);
@@ -169,129 +136,6 @@ public class FileExplorer extends FirstPersonApp {
 
         initFileModels(Gdx.files.absolute(Gdx.files.getExternalStoragePath()));
         super.doneLoading();
-    }
-
-    private void setupEnterButton() {
-        final Texture enterButtonTexture = assets.get(ENTER_BUTTON_TEXTURE, Texture.class);
-        disposables.add(enterButtonTexture);
-        skin.add(ENTER_BUTTON_TEXTURE, enterButtonTexture, Texture.class);
-        ImageButton enterButton = new ImageButton(skin.newDrawable(ENTER_BUTTON_TEXTURE), skin.newDrawable(ENTER_BUTTON_TEXTURE, Color.GRAY));
-        enterButton.setSize(buttonSize, buttonSize);
-        enterButton.setPosition(Gdx.graphics.getWidth() - buttonSize * 2, margin);
-        enterButton.addListener(new ClickListener() {
-            @Override
-            public void clicked(InputEvent event, float x, float y) {
-                if (closestIndex != -1) {
-                    FileEntity entity = (FileEntity) world.entities.get(closestIndex);
-                    if (entity != null) {
-                        if (entity.file.isDirectory()) {
-                            clearFiles();
-                            setupFileWorld(entity.file, currentDir.path());
-                        } else {
-                            activityInterface.openFile(entity.file.file());
-                        }
-                    }
-                }
-            }
-        });
-        stage.addActor(enterButton);
-    }
-
-    private void setupCopyButton() {
-        final Texture copyButtonTexture = assets.get(COPY_BUTTON_TEXTURE, Texture.class);
-        disposables.add(copyButtonTexture);
-        skin.add(COPY_BUTTON_TEXTURE, copyButtonTexture, Texture.class);
-        ImageButton copyButton = new ImageButton(skin.newDrawable(COPY_BUTTON_TEXTURE), skin.newDrawable(COPY_BUTTON_TEXTURE, Color.GRAY));
-        copyButton.setSize(buttonSize, buttonSize);
-        copyButton.setPosition(Gdx.graphics.getWidth() - buttonSize - margin, buttonSize);
-        copyButton.addListener(new ClickListener() {
-            @Override
-            public void clicked(InputEvent event, float x, float y) {
-                if (closestIndex != -1) {
-                    FileEntity entity = (FileEntity) world.entities.get(closestIndex);
-                    if (entity != null) {
-                        try {
-                            final FileHandle file = entity.file;
-                            String extension = file.extension();
-                            file.copyTo(new FileHandle(file.pathWithoutExtension() + "-Copy" + (extension.isEmpty() ? "" : "." + extension)));
-                            clearFiles();
-//                            setupFileWorld(currentDir);
-                        } catch (GdxRuntimeException e) {
-                            activityInterface.showErrorMessage("unable to copy file: " + e.getMessage());
-                        }
-                    }
-                }
-            }
-        });
-        stage.addActor(copyButton);
-    }
-
-    private void setupDeleteButton() {
-        final Texture deleteButtonTexture = assets.get(DELETE_BUTTON_TEXTURE, Texture.class);
-        disposables.add(deleteButtonTexture);
-        skin.add(DELETE_BUTTON_TEXTURE, deleteButtonTexture, Texture.class);
-        ImageButton deleteButton = new ImageButton(skin.newDrawable(DELETE_BUTTON_TEXTURE), skin.newDrawable(DELETE_BUTTON_TEXTURE, Color.GRAY));
-        deleteButton.setSize(buttonSize, buttonSize);
-        deleteButton.setPosition(Gdx.graphics.getWidth() - buttonSize * 2, buttonSize * 2);
-        deleteButton.addListener(new ClickListener() {
-            @Override
-            public void clicked(InputEvent event, float x, float y) {
-                if (closestIndex != -1) {
-                    FileEntity entity = (FileEntity) world.entities.get(closestIndex);
-                    if (entity != null) {
-                        final FileHandle file = entity.file;
-                        try {
-                            file.delete();
-                            clearFiles();
-                            setupFileWorld(currentDir, null);
-                        } catch (GdxRuntimeException e) {
-                            activityInterface.showErrorMessage("unable to delete file: " + e.getMessage());
-                        }
-                    }
-                }
-            }
-        });
-        stage.addActor(deleteButton);
-    }
-
-
-    private void setupRenameButton() {
-        final Texture renameButtonTexture = assets.get(RENAME_BUTTON_TEXTURE, Texture.class);
-        disposables.add(renameButtonTexture);
-        skin.add(RENAME_BUTTON_TEXTURE, renameButtonTexture, Texture.class);
-        ImageButton renameButton = new ImageButton(skin.newDrawable(RENAME_BUTTON_TEXTURE), skin.newDrawable(RENAME_BUTTON_TEXTURE, Color.GRAY));
-        renameButton.setSize(buttonSize, buttonSize);
-        renameButton.setPosition(Gdx.graphics.getWidth() - buttonSize * 3, buttonSize);
-        renameButton.addListener(new ClickListener() {
-            @Override
-            public void clicked(InputEvent event, float x, float y) {
-                if (closestIndex != -1) {
-                    FileEntity entity = (FileEntity) world.entities.get(closestIndex);
-                    if (entity != null) {
-                        final FileHandle file = entity.file;
-                        final Input.TextInputListener listener = new Input.TextInputListener() {
-                            @Override
-                            public void input(String text) {
-                                try {
-                                    file.file().renameTo(new File(file.parent().file(), text + "." + file.extension()));
-                                    clearFiles();
-                                    setupFileWorld(currentDir, null);
-                                } catch (GdxRuntimeException e) {
-                                    activityInterface.showErrorMessage("unable to rename file: " + e.getMessage());
-                                }
-                            }
-
-                            @Override
-                            public void canceled() {
-
-                            }
-                        };
-                        Gdx.input.getTextInput(listener, "Rename", file.nameWithoutExtension(), "");
-                    }
-                }
-            }
-        });
-        stage.addActor(renameButton);
     }
 
     private void initFileModels(FileHandle file) {
@@ -346,7 +190,7 @@ public class FileExplorer extends FirstPersonApp {
         if (!file.isDirectory()) return;
         final Vector3 characterPos = new Vector3(START_POS);
         currentDir = file;
-        label.setText(file.pathWithoutExtension());
+        hud.setLabelText(file.pathWithoutExtension());
         FileHandle[] fileList = file.list();
         dirs.clear();
         files.clear();
@@ -364,7 +208,7 @@ public class FileExplorer extends FirstPersonApp {
             int n = MathUtils.ceil(numFiles / 10f);
             int x = 0;
             for (int i = 0; i < n; i++) {
-                x = -5 - i * 19;
+                x = -6 - i * 19;
                 tempM.idt().translate(x, 0, 0);
                 world.add(ROOM_MODEL, tempM);
             }
@@ -385,16 +229,16 @@ public class FileExplorer extends FirstPersonApp {
                 } else {
                     key = FILE_MODEL;
                 }
-                fileVec.set(((i / 2) * -3) - 8f - (MathUtils.floor(i / 10f) * 4), 0, even ? -4 : 4);
+                fileVec.set(((i / 2) * -3.68f) - 7.64f - (MathUtils.floor(i / 10f) * 0.6f), 0, even ? -4 : 4);
                 tempM.idt().translate(fileVec).rotate(Vector3.Y, even ? 0 : 180);
                 world.add(constructors.get(key).construct(files.get(i), tempM));
             }
         } else {
-            tempM.idt().translate(-5, 0, 0).rotate(Vector3.Y, 90);
+            tempM.idt().translate(-6, 0, 0).rotate(Vector3.Y, 90);
             world.add(END_MODEL, tempM);
         }
         if(file.parent() != null) {
-            final FileEntity parentEntity = constructors.get(TRANSPORTER_MODEL).construct(file.parent(), tempM.idt().translate(0, 0, 7).rotate(Vector3.Y, 180));
+            final FileEntity parentEntity = constructors.get(TRANSPORTER_MODEL).construct(file.parent(), tempM.idt().translate(0, 0, 8).rotate(Vector3.Y, 180));
             parentEntity.setIsParentDirectory(true);
             world.add(parentEntity);
         }
@@ -413,10 +257,10 @@ public class FileExplorer extends FirstPersonApp {
                     dirIsLeft = !dirIsLeft;
                     final boolean lastRow = numDirs - i < numPerRow;
                     if (lastRow) {
-                        tempM.idt().translate(mainHallVec.add(10, 0, 0)).rotate(Vector3.Y, dirIsLeft ? 270 : 0);
+                        tempM.idt().translate(mainHallVec.add(12, 0, 0)).rotate(Vector3.Y, dirIsLeft ? 270 : 0);
                     world.add(TURN_MODEL, tempM);
                 } else {
-                        tempM.idt().translate(mainHallVec.add(10, 0, 0)).rotate(Vector3.Y, dirIsLeft ? 270 : 90);
+                        tempM.idt().translate(mainHallVec.add(12, 0, 0)).rotate(Vector3.Y, dirIsLeft ? 270 : 90);
                         world.add(T_SECTION_MODEL, tempM);
                     }
                     folderHallVec.set(mainHallVec);
@@ -424,19 +268,22 @@ public class FileExplorer extends FirstPersonApp {
                 }
                 final boolean end = i % numPerRow == numPerRow - 1 || i == numDirs - 1;
                 if(end){
-                    tempM.idt().translate(folderHallVec.add(0, 0, dirIsLeft ? -10 : 10)).rotate(Vector3.Y, dirIsLeft ? (dirIsLeft2 ? 0 : 90) : (dirIsLeft2 ? 180 : 270));
+                    tempM.idt().translate(folderHallVec.add(0, 0, dirIsLeft ? -12 : 12)).rotate(Vector3.Y, dirIsLeft ? (dirIsLeft2 ? 0 : 90) : (dirIsLeft2 ? 180 : 270));
                     world.add(TURN_MODEL, tempM);
                 }else {
-                    tempM.idt().translate(folderHallVec.add(0, 0, dirIsLeft ? -10 : 10)).rotate(Vector3.Y, dirIsLeft ? (dirIsLeft2 ? 0 : 180) : (dirIsLeft2 ? 180 : 0));
+                    tempM.idt().translate(folderHallVec.add(0, 0, dirIsLeft ? -12 : 12)).rotate(Vector3.Y, dirIsLeft ? (dirIsLeft2 ? 0 : 180) : (dirIsLeft2 ? 180 : 0));
                     world.add(T_SECTION_MODEL, tempM);
                 }
-                tempV.set(folderHallVec).add(dirIsLeft ? (dirIsLeft2 ? -7 : 7) : (dirIsLeft2 ? 7 : -7), 0, 0);
+                tempV.set(folderHallVec).add(dirIsLeft ? (dirIsLeft2 ? -8 : 8) : (dirIsLeft2 ? 8 : -8), 0, 0);
                 final int degrees = dirIsLeft ? (dirIsLeft2 ? 90 : 270) : (dirIsLeft2 ? 270 : 90);
                 world.add(constructors.get(TRANSPORTER_MODEL).construct(dirs.get(i), tempM.idt().translate(tempV).rotate(Vector3.Y, degrees)));
                 if(fromFilePath != null){
                     if(dirs.get(i).path().equals(fromFilePath)) {
                         characterPos.set(tempV);
+                        camera.position.set(tempV);
                         camera.lookAt(tempV.set(0f, 1.5f, -10f).rotate(Vector3.Y, degrees + 180).add(characterPos));
+                        camera.up.set(Vector3.Y);
+                        camera.update();
                     }
                 }
                 dirIsLeft2 = !dirIsLeft2;
@@ -447,6 +294,8 @@ public class FileExplorer extends FirstPersonApp {
         }
         if(fromFilePath == null){
             camera.lookAt(10f, 1.5f, 0f);
+            camera.up.set(Vector3.Y);
+            camera.update();
         }
         characterTransform.setToTranslation(characterPos);
     }
@@ -540,6 +389,114 @@ public class FileExplorer extends FirstPersonApp {
     @Override
     public void resize(int width, int height) {
         super.resize(width, height);
-        label.setPosition(margin, height - 16f * density - margin);
+    }
+
+    @Override
+    public void onGoClicked() {
+        if (closestIndex != -1) {
+            FileEntity entity = (FileEntity) world.entities.get(closestIndex);
+            if (entity != null) {
+                if (entity.file.isDirectory()) {
+                    clearFiles();
+                    setupFileWorld(entity.file, currentDir.path());
+                } else {
+                    activityInterface.openFile(entity.file.file());
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onRenameClicked() {
+        if (closestIndex != -1) {
+            FileEntity entity = (FileEntity) world.entities.get(closestIndex);
+            if (entity != null) {
+                final FileHandle file = entity.file;
+                final Input.TextInputListener listener = new Input.TextInputListener() {
+                    @Override
+                    public void input(String text) {
+                        try {
+                            final boolean ok = file.file().renameTo(new File(file.parent().file(), text + "." + file.extension()));
+                            if (!ok) activityInterface.showErrorMessage("unable to rename file");
+                            clearFiles();
+                            setupFileWorld(currentDir, null);
+                        } catch (GdxRuntimeException e) {
+                            activityInterface.showErrorMessage("unable to rename file: " + e.getMessage());
+                        }
+                    }
+
+                    @Override
+                    public void canceled() {
+
+                    }
+                };
+                Gdx.input.getTextInput(listener, "Rename", file.nameWithoutExtension(), "");
+            }
+        }
+    }
+
+    @Override
+    public void onCutClicked() {
+
+    }
+
+    @Override
+    public void onCopyClicked() {
+        if (closestIndex != -1) {
+            FileEntity entity = (FileEntity) world.entities.get(closestIndex);
+            if (entity != null) {
+                try {
+                    final FileHandle file = entity.file;
+                    String extension = file.extension();
+                    file.copyTo(new FileHandle(file.pathWithoutExtension() + "-Copy" + (extension.isEmpty() ? "" : "." + extension)));
+                    clearFiles();
+//                            setupFileWorld(currentDir);
+                } catch (GdxRuntimeException e) {
+                    activityInterface.showErrorMessage("unable to copy file: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onPasteClicked() {
+
+    }
+
+    @Override
+    public void onDeleteClicked() {
+        if (closestIndex != -1) {
+            FileEntity entity = (FileEntity) world.entities.get(closestIndex);
+            if (entity != null) {
+                final FileHandle file = entity.file;
+                try {
+                    file.delete();
+                    clearFiles();
+                    setupFileWorld(currentDir, null);
+                } catch (GdxRuntimeException e) {
+                    activityInterface.showErrorMessage("unable to delete file: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onSendClicked() {
+
+    }
+
+    @Override
+    public void onOpenClicked() {
+        if (closestIndex != -1) {
+            FileEntity entity = (FileEntity) world.entities.get(closestIndex);
+            if (entity != null) {
+                if (entity.file.isDirectory()) {
+                    clearFiles();
+                    setupFileWorld(entity.file, currentDir.path());
+                } else {
+                    activityInterface.openFile(entity.file.file());
+                }
+            }
+        }
     }
 }

@@ -13,7 +13,6 @@ import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.BaseLight;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
-import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.bullet.Bullet;
 import com.badlogic.gdx.physics.bullet.collision.btConvexHullShape;
 import com.badlogic.gdx.physics.bullet.collision.btShapeHull;
@@ -33,10 +32,37 @@ public class BaseBulletApp extends ApplicationAdapter {
     public AssetManager assets;
     public boolean loading = true;
 
+    public static btConvexHullShape createConvexHullShape(Model model, boolean optimize) {
+        final Mesh mesh = model.meshes.get(0);
+        final btConvexHullShape shape = new btConvexHullShape(mesh.getVerticesBuffer(), mesh.getNumVertices(), mesh.getVertexSize());
+        if (!optimize) return shape;
+        // now optimize the shape
+        final btShapeHull hull = new btShapeHull(shape);
+        hull.buildHull(shape.getMargin());
+        final btConvexHullShape result = new btConvexHullShape(hull);
+        // delete the temporary shape
+        shape.dispose();
+        hull.dispose();
+        return result;
+    }
+
+    public static btConvexHullShape createConvexHullShape(Mesh mesh, boolean optimize) {
+        final btConvexHullShape shape = new btConvexHullShape(mesh.getVerticesBuffer(), mesh.getNumVertices(), mesh.getVertexSize());
+        if (!optimize) return shape;
+        // now optimize the shape
+        final btShapeHull hull = new btShapeHull(shape);
+        hull.buildHull(shape.getMargin());
+        final btConvexHullShape result = new btConvexHullShape(hull);
+        // delete the temporary shape
+        shape.dispose();
+        hull.dispose();
+        return result;
+    }
+
     private void init(){
         Bullet.init();
     }
-    
+
     public BulletWorld createWorld(){
         return new BulletWorld();
     }
@@ -48,24 +74,19 @@ public class BaseBulletApp extends ApplicationAdapter {
         world = createWorld();
         modelBatch = new ModelBatch();
         environment = new Environment();
-        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, Color.WHITE));
-//        environment.add(createLight());
+        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, Color.LIGHT_GRAY));
+        environment.add(createLight());
         final int width = Gdx.graphics.getWidth();
         final int height = Gdx.graphics.getHeight();
         if(width > height)
             camera = new PerspectiveCamera(90, 1f * width / height, 1f);
         else
             camera = new PerspectiveCamera(90, 1f, 1f * height / width);
-        camera.position.set(10f, 10f, 10f);
-        camera.lookAt(Vector3.Zero);
-        camera.near = 1f;
-        camera.far = 300f;
-        camera.update();
     }
 
     public BaseLight createLight() {
         final DirectionalLight light = new DirectionalLight();
-        light.set(Color.WHITE, 0.2f, -0.8f, 0.4f);
+        light.set(Color.DARK_GRAY, 0.0f, -1.0f, 0.0f);
         return light;
     }
 
@@ -109,33 +130,6 @@ public class BaseBulletApp extends ApplicationAdapter {
         assets.dispose();
         assets = null;
         modelBatch = null;
-    }
-    
-    public static btConvexHullShape createConvexHullShape(Model model, boolean optimize){
-        final Mesh mesh = model.meshes.get(0);
-        final btConvexHullShape shape = new btConvexHullShape(mesh.getVerticesBuffer(), mesh.getNumVertices(), mesh.getVertexSize());
-        if (!optimize) return shape;
-        // now optimize the shape
-        final btShapeHull hull = new btShapeHull(shape);
-        hull.buildHull(shape.getMargin());
-        final btConvexHullShape result = new btConvexHullShape(hull);
-        // delete the temporary shape
-        shape.dispose();
-        hull.dispose();
-        return result;
-    }
-    
-    public static btConvexHullShape createConvexHullShape(Mesh mesh, boolean optimize){
-        final btConvexHullShape shape = new btConvexHullShape(mesh.getVerticesBuffer(), mesh.getNumVertices(), mesh.getVertexSize());
-        if (!optimize) return shape;
-        // now optimize the shape
-        final btShapeHull hull = new btShapeHull(shape);
-        hull.buildHull(shape.getMargin());
-        final btConvexHullShape result = new btConvexHullShape(hull);
-        // delete the temporary shape
-        shape.dispose();
-        hull.dispose();
-        return result;
     }
 
     public void doneLoading() {
