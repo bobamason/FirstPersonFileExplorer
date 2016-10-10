@@ -1,6 +1,6 @@
 android {
-    buildToolsVersion "23.0.0"
-    compileSdkVersion 23
+    buildToolsVersion '24.0.2'
+    compileSdkVersion 24
     sourceSets {
         main {
             manifest.srcFile 'AndroidManifest.xml'
@@ -13,6 +13,12 @@ android {
         }
 
         instrumentTest.setRoot('tests')
+    }
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 24
+    }
+    productFlavors {
     }
 }
 // called every time gradle gets executed, takes the native dependencies of
@@ -109,4 +115,8 @@ idea {
             }
         }
     }
+}
+dependencies {
+    compile project(':base')
+    compile project(':common')
 }

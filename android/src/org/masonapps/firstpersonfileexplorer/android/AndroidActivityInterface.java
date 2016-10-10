@@ -1,5 +1,6 @@
 package org.masonapps.firstpersonfileexplorer.android;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -17,9 +18,9 @@ import java.io.File;
 public class AndroidActivityInterface implements IActivityInterface {
 
     private static final String TAG = "ActivityInterface";
+    private static final MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
     private final Handler handler;
     private Context context;
-    private static final MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
 
     public AndroidActivityInterface(Context context) {
         this.context = context;
@@ -95,7 +96,12 @@ public class AndroidActivityInterface implements IActivityInterface {
         });
     }
 
-    private void makeToast(String msg) {
-        Toast.makeText(context.getApplicationContext(), msg, Toast.LENGTH_SHORT).show();
+    private void makeToast(final String msg) {
+        ((Activity) context).runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(context.getApplicationContext(), msg, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 }
