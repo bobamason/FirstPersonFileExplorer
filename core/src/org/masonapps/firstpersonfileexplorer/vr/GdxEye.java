@@ -64,7 +64,7 @@ public class GdxEye {
         this.perspective.set(perspective);
     }
 
-    public void setViewport(float x, float y, float width, float height) {
+    public void setViewport(int x, int y, int width, int height) {
         this.viewport.x = x;
         this.viewport.y = y;
         this.viewport.width = width;
@@ -106,6 +106,6 @@ public class GdxEye {
     }
 
     public static class Viewport {
-        public float x, y, width, height;
+        public int x, y, width, height;
     }
 }
