@@ -50,7 +50,7 @@ public class GVRApplication extends AndroidApplication {
         net = new AndroidNet(this);
         this.listener = listener;
         this.handler = new Handler();
-        this.useImmersiveMode = config.useImmersiveMode;
+        this.useImmersiveMode = true;
         this.hideStatusBar = config.hideStatusBar;
 
         // Add a specialized audio lifecycle listener
